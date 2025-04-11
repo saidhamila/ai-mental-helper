@@ -2,7 +2,7 @@
 
 import { useAnimations, useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, memo } from "react"; // Import memo
 import { useSnapshot } from 'valtio/react'; // Import useSnapshot
 import { avatarStore, avatarActions } from '@/store/avatarStore'; // Import store and actions
 import * as THREE from "three";
@@ -22,30 +22,17 @@ const facialExpressions = {
   },
 };
 
-// --- Viseme Mapping ---
-// Example mapping - adjust based on actual ElevenLabs viseme labels
-const visemeMapping: { [key: string]: string } = {
-  p: "viseme_PP", b: "viseme_PP", m: "viseme_PP",
-  f: "viseme_FF", v: "viseme_FF",
-  k: "viseme_kk", g: "viseme_kk",
-  t: "viseme_DD", d: "viseme_DD", n: "viseme_nn",
-  s: "viseme_SS", z: "viseme_SS",
-  T: "viseme_TH", D: "viseme_TH", // th sounds
-  S: "viseme_CH", Z: "viseme_CH", // sh, zh sounds
-  r: "viseme_RR", l: "viseme_RR",
-  i: "viseme_I", I: "viseme_I",   // ee, ih
-  e: "viseme_E", E: "viseme_E",   // eh, ae
-  a: "viseme_AA", A: "viseme_AA", // ah
-  O: "viseme_O", o: "viseme_O",   // oh, aw
-  u: "viseme_U", U: "viseme_U",   // oo, book
-  sil: "viseme_sil", // Silence - map to a specific target or handle separately
-};
-const allVisemeMorphNames = [...new Set(Object.values(visemeMapping))]; // Unique morph names used
+// --- A2F Blendshape Handling (Placeholder) ---
+// We will need to know the names of the blendshapes provided by A2F
+// and how they map to the morph targets in the GLB model (nodes.Wolf3D_Head.morphTargetDictionary).
+// Example potential A2F blendshape names (replace with actual names):
+// const a2fBlendshapeNames = ["mouthOpen", "jawOpen", "mouthSmile", "eyesClosed", ...];
 
 // Update component signature
 // Update component signature
 // Update component signature - remove props
-export function R3FAvatar(props: any) { // Keep generic props for position etc.
+// Wrap component definition
+const R3FAvatarComponent = (props: any) => { // Keep generic props for position etc.
   // Get state snapshot from Valtio store
   const snap = useSnapshot(avatarStore);
   const group = useRef<THREE.Group>(null);
@@ -165,9 +152,7 @@ export function R3FAvatar(props: any) { // Keep generic props for position etc.
   const [blink, setBlink] = useState(false);
   const [facialExpression] = useState("default"); // Keep default for now
 
-  // Store the current viseme target
-  const currentViseme = useRef<string | null>(null);
-
+  // TODO: Add refs or state needed to manage A2F animation timing and interpolation if necessary
   useFrame(() => {
     // Apply facial expressions (simplified)
     Object.keys(nodes.EyeLeft.morphTargetDictionary).forEach((key) => {
@@ -186,47 +171,65 @@ export function R3FAvatar(props: any) { // Keep generic props for position etc.
     lerpMorphTarget("eyeBlinkLeft", blink ? 1 : 0, 0.5);
     lerpMorphTarget("eyeBlinkRight", blink ? 1 : 0, 0.5);
 
-    // --- Lip Sync Logic ---
-    let activeMorphTarget: string | null = null;
-
-    if (snap.isPlayingAudio && audioRef.current && snap.lipSyncData?.visemes?.length > 0) {
+    // --- A2F Animation Logic (Placeholder) ---
+    if (snap.isPlayingAudio && audioRef.current && snap.animationData) {
       const currentTime = audioRef.current.currentTime;
 
-      // Find the current viseme based on timestamp
-      // Assumes snap.lipSyncData.visemes is sorted: [ [viseme_label, timestamp], ... ]
-      let foundVisemeLabel = 'sil'; // Default to silence
-      for (let i = snap.lipSyncData.visemes.length - 1; i >= 0; i--) {
-        const [label, timestamp] = snap.lipSyncData.visemes[i];
-        if (currentTime >= timestamp) {
-          foundVisemeLabel = label;
-          break;
-        }
+      // TODO: Parse snap.animationData (the A2F gRPC response)
+      // The structure is unknown, but we expect blendshape values over time.
+      // Example structure might be: snap.animationData.frames[frameIndex].blendshapes = { mouthOpen: 0.8, ... }
+      // Or it might be a continuous stream of values.
+
+      // TODO: Find the correct blendshape values for the current audio time (currentTime).
+      // This might involve finding the closest frame in the animationData or interpolating between frames.
+      // Example placeholder:
+      const currentBlendshapes = getCurrentA2FBlendshapes(snap.animationData, currentTime); // Placeholder function
+
+      // TODO: Apply the found blendshape values to the model's morph targets.
+      // Iterate through the blendshapes received from A2F for the current time.
+      if (currentBlendshapes) {
+        Object.entries(currentBlendshapes).forEach(([name, value]) => {
+          // We need a mapping from A2F blendshape names (name) to the model's morph target names.
+          // For now, assume they match or use a placeholder mapping.
+          const morphTargetName = name; // Placeholder: Assume direct mapping
+          lerpMorphTarget(morphTargetName, value as number, 0.2); // Adjust interpolation speed as needed
+        });
       }
 
-      // Map the found label to our morph target name
-      activeMorphTarget = visemeMapping[foundVisemeLabel] || null; // Map label to morph target
-      if (foundVisemeLabel === 'sil') {
-          activeMorphTarget = null; // Don't activate any morph for silence
-      }
-      currentViseme.current = activeMorphTarget; // Store for interpolation
+      // TODO: Reset morph targets not included in the current A2F frame?
+      // This depends on whether A2F provides all blendshapes per frame or only active ones.
+      // If only active ones, we need to reset others.
+      // Example:
+      // const allModelMorphTargets = Object.keys(nodes.Wolf3D_Head.morphTargetDictionary);
+      // allModelMorphTargets.forEach(targetName => {
+      //   if (!currentBlendshapes || !(targetName in currentBlendshapes)) {
+      //      // Don't reset blinking or facial expressions managed elsewhere
+      //      if (targetName !== 'eyeBlinkLeft' && targetName !== 'eyeBlinkRight' /* && other expression targets */) {
+      //         lerpMorphTarget(targetName, 0, 0.2);
+      //      }
+      //   }
+      // });
 
     } else {
-      // If not playing, reset target
-      currentViseme.current = null;
+      // If not playing audio or no animation data, reset facial animation morph targets (except expressions/blinking).
+      // TODO: Define the list of morph targets controlled by A2F and reset them here.
+      // Example placeholder - reset common lip-sync targets:
+      const lipSyncTargets = ["viseme_PP", "viseme_FF", "viseme_kk", "viseme_DD", "viseme_nn", "viseme_SS", "viseme_TH", "viseme_CH", "viseme_RR", "viseme_I", "viseme_E", "viseme_AA", "viseme_O", "viseme_U", "jawOpen", "mouthOpen"]; // Add actual A2F targets
+      lipSyncTargets.forEach(targetName => {
+         lerpMorphTarget(targetName, 0, 0.2);
+      });
     }
-
-    // Apply interpolation to all viseme morph targets
-    allVisemeMorphNames.forEach((name) => {
-      if (name === 'viseme_sil') return; // Skip explicit silence target if handled by resetting others
-
-      if (name === currentViseme.current) {
-        lerpMorphTarget(name, 1, 0.4); // Interpolate active viseme to 1 (adjust speed)
-      } else {
-        lerpMorphTarget(name, 0, 0.4); // Interpolate inactive visemes to 0 (adjust speed)
-      }
-      }); // End of forEach loop
-// The forEach loop correctly handles the case where currentViseme.current is null (audio not playing)
   });
+
+// Placeholder function - replace with actual logic based on A2F response structure
+function getCurrentA2FBlendshapes(animationData: any, currentTime: number): Record<string, number> | null {
+  // console.log("Attempting to get blendshapes for time:", currentTime, "from data:", animationData);
+  // This needs to parse the specific gRPC response format from NVIDIA A2F.
+  // It might involve finding the frame closest to currentTime.
+  // Example: If animationData has { frames: [{ time: 0.1, blendshapes: {...} }, ...] }
+  // Find the frame where frame.time <= currentTime and potentially interpolate.
+  return null; // Return null until implemented
+}
 
   // Blinking logic
   useEffect(() => {
@@ -312,7 +315,10 @@ export function R3FAvatar(props: any) { // Keep generic props for position etc.
       />
     </group>
   );
-}
+};
+
+// Export the memoized component
+export const R3FAvatar = memo(R3FAvatarComponent);
 
 // Preload assets
 useGLTF.preload("/models/64f1a714fe61576b46f27ca2.glb");

@@ -1,7 +1,9 @@
-let userConfig = undefined
+import MiniCssExtractPlugin from 'mini-css-extract-plugin';
+
+let userConfig = undefined;
 try {
   // try to import ESM first
-  userConfig = await import('./v0-user-next.config.mjs')
+  userConfig = await import('./v0-user-next.config.mjs');
 } catch (e) {
   try {
     // fallback to CJS import
@@ -26,6 +28,16 @@ const nextConfig = {
     webpackBuildWorker: true,
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
+  },
+  webpack: (config, { isServer }) => {
+    // Explicitly add MiniCssExtractPlugin
+    // Ensure it's only added once and not on the server build
+    if (!isServer && !config.plugins.some(plugin => plugin.constructor.name === 'MiniCssExtractPlugin')) {
+      config.plugins.push(new MiniCssExtractPlugin());
+    }
+
+    // Important: return the modified config
+    return config;
   },
 }
 

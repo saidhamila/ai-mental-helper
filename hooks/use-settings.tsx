@@ -122,6 +122,7 @@ const DEFAULT_SETTINGS: Settings = {
   selectedModel: "openai",
   apiUrl: "https://api.openai.com/v1",
   predefinedPrompt: DEFAULT_PROMPT,
+  deepseekApiKey: "sk-0c198e8cdac84f4490a252bba561d3ed", // Added default DeepSeek key
   // Deepgram Defaults
   deepgramApiKey: "b6d9bbcbbf12a3f97da908f2751c2cbbe0c2f2d9",
   deepgramApiUrl: "https://api.deepgram.com/v1/listen",
@@ -135,14 +136,16 @@ const DEFAULT_SETTINGS: Settings = {
 
 // Create context
 const SettingsContext = createContext<{
-  settings: Settings
-  updateSettings: (key: keyof Settings, value: any) => void
-  saveSettings: () => void
+  settings: Settings;
+  updateSettings: (key: keyof Settings, value: any) => void;
+  saveSettings: () => void;
+  isInitialized: boolean; // Add isInitialized state
 }>({
   settings: DEFAULT_SETTINGS,
   updateSettings: () => {},
   saveSettings: () => {},
-})
+  isInitialized: false, // Default value for isInitialized
+});
 
 // Provider component
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
@@ -191,15 +194,21 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   // for localStorage loading, but for this case, providing defaults immediately is better.
 
   return (
-    <SettingsContext.Provider value={{ settings, updateSettings, saveSettings }}>{children}</SettingsContext.Provider>
-  )
+    <SettingsContext.Provider value={{ settings, updateSettings, saveSettings, isInitialized }}>{children}</SettingsContext.Provider>
+  );
 }
 
 // Custom hook
-export function useSettings() {
-  const context = useContext(SettingsContext)
+// Custom hook
+export function useSettings(): {
+  settings: Settings;
+  updateSettings: (key: keyof Settings, value: any) => void;
+  saveSettings: () => void;
+  isInitialized: boolean;
+} {
+  const context = useContext(SettingsContext);
   if (!context) {
-    throw new Error("useSettings must be used within a SettingsProvider")
+    throw new Error("useSettings must be used within a SettingsProvider");
   }
-  return context
+  return context;
 }

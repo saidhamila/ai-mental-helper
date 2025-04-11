@@ -3,11 +3,10 @@ import type { Config } from "tailwindcss"
 const config = {
   darkMode: ["class"],
   content: [
-    "./pages/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
+    // Only include paths relevant to this App Router project
     "./app/**/*.{ts,tsx}",
-    "./src/**/*.{ts,tsx}",
-    "*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{ts,tsx}",
+    // "./src/**/*.{ts,tsx}", // Uncomment if you use a src directory
   ],
   prefix: "",
   theme: {

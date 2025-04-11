@@ -1,7 +1,7 @@
 "use client"
 
 import { Canvas } from "@react-three/fiber";
-import { Suspense } from "react";
+import { Suspense, memo } from "react"; // Import memo
 import { R3FExperience } from "./R3FExperience"; // Import the experience component
 
 // No props needed anymore, state comes from Valtio store
@@ -9,7 +9,8 @@ import { R3FExperience } from "./R3FExperience"; // Import the experience compon
 
 // Update component signature
 // Update component signature
-export default function AvatarDisplay() { // Removed props
+// Wrap the component definition for memoization
+const AvatarDisplayComponent = () => { // Removed props
   return (
     <div className="relative w-full h-full">
       {/* R3F Canvas */}
@@ -23,4 +24,7 @@ export default function AvatarDisplay() { // Removed props
       {/* Title removed, will be placed in the parent component */}
     </div>
   )
-}
+};
+
+// Export the memoized component
+export default memo(AvatarDisplayComponent);

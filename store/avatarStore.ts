@@ -4,7 +4,7 @@ import { proxy } from 'valtio'
 interface AvatarState {
   animationName: string;
   audioUrl: string | null;
-  lipSyncData: any | null; // Placeholder type, refine later
+  animationData: any | null; // Changed from lipSyncData, placeholder type
   isPlayingAudio: boolean;
   // Add other avatar-specific states if needed later
 }
@@ -12,7 +12,7 @@ interface AvatarState {
 export const avatarStore = proxy<AvatarState>({
   animationName: 'Idle', // Default animation
   audioUrl: null,
-  lipSyncData: null,
+  animationData: null, // Changed from lipSyncData
   isPlayingAudio: false,
 });
 
@@ -21,15 +21,15 @@ export const avatarActions = {
   setAnimation: (name: string) => {
     avatarStore.animationName = name;
   },
-  playAudio: (url: string, lipSync: any) => {
+  playAudio: (url: string, animData: any) => { // Changed param name
     avatarStore.audioUrl = url;
-    avatarStore.lipSyncData = lipSync;
+    avatarStore.animationData = animData; // Changed state property
     avatarStore.isPlayingAudio = true;
     avatarStore.animationName = 'Talking'; // Assume talking animation when audio plays
   },
   stopAudio: () => {
     avatarStore.audioUrl = null;
-    avatarStore.lipSyncData = null;
+    avatarStore.animationData = null; // Changed state property
     avatarStore.isPlayingAudio = false;
     avatarStore.animationName = 'Idle'; // Revert to idle when stopped
   },

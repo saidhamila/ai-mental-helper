@@ -57,12 +57,42 @@ const loadChatHistory = (): ChatHistoryItem[] => {
   } catch (error) {
     console.error("Failed to load chat history:", error)
   }
-  return []
+  return [];
 }
+
+// --- Define AvatarPanelComponent OUTSIDE Home ---
+interface AvatarPanelProps {
+  layoutDirection: 'ltr' | 'rtl';
+  darkMode: boolean;
+}
+
+const AvatarPanelComponent = memo(({ layoutDirection, darkMode }: AvatarPanelProps) => (
+  // Remove justify-center, add h-full to ensure it takes full height
+  <div className={cn(
+      "w-80 flex-shrink-0 flex-col items-center hidden md:flex h-full", // Removed justify-center, added h-full
+      // Conditional border based on layout direction
+      layoutDirection === 'ltr' ? 'border-l' : 'border-r',
+      darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
+    )}
+  >
+    <div className="text-center p-4">
+      {/* Updated Title */}
+      <h2 className="text-lg font-semibold mb-2 text-black dark:text-white">
+        <span className="text-yellow-500">Emma</span> Mental Health Assistant
+      </h2>
+      <div className="mt-4 border rounded h-96 w-full overflow-hidden relative bg-gray-200 dark:bg-gray-700">
+        {/* AvatarDisplay will get state directly from store */}
+        <AvatarDisplay />
+      </div>
+    </div>
+  </div>
+));
+AvatarPanelComponent.displayName = 'AvatarPanelComponent'; // Add display name for memoized component
+// --- End AvatarPanelComponent Definition ---
 
 export default function Home() {
   // Settings and state
-  const { settings, updateSettings, saveSettings: saveSettingsToContext } = useSettings()
+  const { settings, updateSettings, saveSettings: saveSettingsToContext, isInitialized } = useSettings() // Add isInitialized
   const [darkMode, setDarkMode] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -132,13 +162,13 @@ export default function Home() {
   // Revert to reading key/voiceId from settings inside the function
   const handleTextToSpeech = async (text: string) => {
     // Get key and voiceId from settings context
-    const elevenLabsApiKey = settings.elevenLabsApiKey;
+    const elevenlabsApiKey = settings.elevenlabsApiKey; // Correct casing
     const voiceId = settings.voiceId;
     avatarActions.stopAudio(); // Clear previous audio/sync data using action (this also clears lipSyncData in the store)
     console.log('Settings in handleTextToSpeech:', settings); // Add logging
 
     // Check for API key from settings
-    if (!elevenLabsApiKey) {
+    if (!elevenlabsApiKey) { // Correct casing
       showWarning("ElevenLabs API Key is missing in settings.");
       avatarActions.setAnimation("Idle"); // Revert to Idle if TTS can't proceed
       setIsLoading(false); // Stop loading indicator
@@ -155,7 +185,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: text,
-          apiKey: elevenLabsApiKey, // Pass key from settings
+          apiKey: elevenlabsApiKey, // Pass key from settings (Correct casing)
           voiceId: voiceId || '2Lb1en5ujrODDIqmp7F3', // Pass voiceId from settings or use default
         }),
       });
@@ -168,12 +198,14 @@ export default function Home() {
       const data = await response.json();
       console.log("Received TTS data:", data);
 
-      if (data.audioUrl) { // Assuming lipSyncData might be separate or included later
-        // Use action to update store and trigger playback in R3FAvatar
-        avatarActions.playAudio(data.audioUrl, data.lipSyncData || null);
-        // Animation will be set back to Idle by the R3FAvatar component when audio finishes
+      // Expect audioUrl and potentially animationData from the backend
+      if (data.audioUrl) {
+        console.log("Received animationData from backend:", data.animationData);
+        // Pass audioUrl and the new animationData (which might be null) to the store action
+        avatarActions.playAudio(data.audioUrl, data.animationData || null);
+        // Animation state is handled by the store/R3FAvatar component
       } else {
-        throw new Error("TTS API did not return expected audioUrl and lipSyncData.");
+        throw new Error("TTS API did not return an audioUrl.");
       }
 
     } catch (error) {
@@ -243,17 +275,8 @@ export default function Home() {
 
       // Now, generate speech for the received text
       if (assistantText) {
-        // --- Add explicit check here ---
-        if (!settings.elevenLabsApiKey) {
-          console.error("[Client Submit] ElevenLabs API Key missing in settings *just before* calling handleTextToSpeech.");
-          showWarning("ElevenLabs API Key is missing in settings. Please check and save settings.");
-          setIsLoading(false);
-          avatarActions.setAnimation("Idle");
-        } else {
-          // Key exists in settings state, proceed with the call
-          await handleTextToSpeech(assistantText);
-        }
-        // --- End explicit check ---
+        // Settings are guaranteed to be loaded here because the form is disabled until isInitialized is true
+        await handleTextToSpeech(assistantText);
       } else {
         // If no text, stop loading and reset animation
         setIsLoading(false);
@@ -399,7 +422,8 @@ export default function Home() {
       if (apiKey) {
         const titleResponse = await fetch("/api/generate-title", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: messagesToSave, model: modelName, apiUrl }),
+          // Remove model and apiUrl as the backend route now always uses DeepSeek
+          body: JSON.stringify({ messages: messagesToSave }),
         })
         if (titleResponse.ok) { const titleData = await titleResponse.json(); finalTitle = titleData.title || finalTitle }
         else { console.error("Failed to generate chat title:", await titleResponse.text()) }
@@ -454,35 +478,7 @@ export default function Home() {
   }, [apiWarningMessage])
 
 // --- Define AvatarPanelComponent OUTSIDE Home ---
-interface AvatarPanelProps {
-  // Removed avatar-specific props
-  layoutDirection: 'ltr' | 'rtl';
-  darkMode: boolean;
-}
-
-const AvatarPanelComponent = memo(({ layoutDirection, darkMode }: AvatarPanelProps) => (
-  // Remove justify-center, add h-full to ensure it takes full height
-  <div className={cn(
-      "w-80 flex-shrink-0 flex-col items-center hidden md:flex h-full", // Removed justify-center, added h-full
-      // Conditional border based on layout direction
-      layoutDirection === 'ltr' ? 'border-l' : 'border-r',
-      darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
-    )}
-  >
-    <div className="text-center p-4">
-      {/* Updated Title */}
-      <h2 className="text-lg font-semibold mb-2 text-black dark:text-white">
-        <span className="text-yellow-500">Emma</span> Mental Health Assistant
-      </h2>
-      <div className="mt-4 border rounded h-96 w-full overflow-hidden relative bg-gray-200 dark:bg-gray-700">
-        {/* Pass props down */}
-        {/* No props passed down, AvatarDisplay will get state from store */}
-        <AvatarDisplay />
-      </div>
-    </div>
-  </div>
-));
-AvatarPanelComponent.displayName = 'AvatarPanelComponent'; // Add display name for memoized component
+// (Moved this entire block outside the Home component definition)
 
 // --- Home Component ---
   // *** START OF REWRITTEN JSX ***
@@ -666,8 +662,8 @@ AvatarPanelComponent.displayName = 'AvatarPanelComponent'; // Add display name f
               </Card>
               {/* Input Form */}
               <form onSubmit={handleChatSubmit} className="flex gap-2">
-                <Input value={input} onChange={handleInputChange} placeholder={t("inputPlaceholder")} className={cn("flex-1", darkMode ? "bg-gray-900 border-gray-800" : "bg-white")} />
-                <Button type="submit" className="bg-yellow-400 hover:bg-yellow-500 text-black"><Send size={18} /></Button>
+                <Input value={input} onChange={handleInputChange} placeholder={t("inputPlaceholder")} className={cn("flex-1", darkMode ? "bg-gray-900 border-gray-800" : "bg-white")} disabled={!isInitialized || isLoading} /> {/* Disable input */}
+                <Button type="submit" className="bg-yellow-400 hover:bg-yellow-500 text-black" disabled={!isInitialized || isLoading || !input.trim()}><Send size={18} /></Button> {/* Disable button */}
                 <Button type="button" onClick={toggleSpeechRecognition} className={cn("bg-yellow-400 hover:bg-yellow-500 text-black", isListening && "bg-red-500 hover:bg-red-600")}><Mic size={18} /></Button>
               </form>
             </div>

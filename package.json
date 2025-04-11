@@ -13,6 +13,8 @@
     "@ai-sdk/google": "latest",
     "@ai-sdk/openai": "latest",
     "@google-cloud/speech": "^7.0.1",
+    "@grpc/grpc-js": "^1.13.3",
+    "@grpc/proto-loader": "^0.7.13",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.4",
@@ -77,6 +79,7 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/three": "latest",
+    "mini-css-extract-plugin": "^2.9.2",
     "postcss": "^8",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
