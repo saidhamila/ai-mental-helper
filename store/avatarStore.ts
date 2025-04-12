@@ -10,7 +10,7 @@ interface AvatarState {
 }
 
 export const avatarStore = proxy<AvatarState>({
-  animationName: 'Idle', // Default animation
+  animationName: 'W_2', // Default animation (Updated from Idle)
   audioUrl: null,
   animationData: null, // Changed from lipSyncData
   isPlayingAudio: false,
@@ -25,13 +25,15 @@ export const avatarActions = {
     avatarStore.audioUrl = url;
     avatarStore.animationData = animData; // Changed state property
     avatarStore.isPlayingAudio = true;
-    avatarStore.animationName = 'Talking'; // Assume talking animation when audio plays
+    // Keep body animation Idle while talking, as 'Talking' animation doesn't exist
+    // Facial animation is handled by blendshapes
+    avatarStore.animationName = 'W_2'; // Keep playing default body animation (Updated from Idle)
   },
   stopAudio: () => {
     avatarStore.audioUrl = null;
     avatarStore.animationData = null; // Changed state property
     avatarStore.isPlayingAudio = false;
-    avatarStore.animationName = 'Idle'; // Revert to idle when stopped
+    avatarStore.animationName = 'W_2'; // Revert to default animation when stopped (Updated from Idle)
   },
   // Add more actions as needed
 };

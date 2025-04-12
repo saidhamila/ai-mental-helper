@@ -69,18 +69,20 @@ interface AvatarPanelProps {
 const AvatarPanelComponent = memo(({ layoutDirection, darkMode }: AvatarPanelProps) => (
   // Remove justify-center, add h-full to ensure it takes full height
   <div className={cn(
-      "w-80 flex-shrink-0 flex-col items-center hidden md:flex h-full", // Removed justify-center, added h-full
+      "w-80 flex-shrink-0 flex-col hidden md:flex h-full", // Removed items-center
       // Conditional border based on layout direction
       layoutDirection === 'ltr' ? 'border-l' : 'border-r',
       darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"
     )}
   >
-    <div className="text-center p-4">
+    {/* Make intermediate container a full-height flex column */}
+    <div className="flex flex-col h-full text-center p-4">
       {/* Updated Title */}
       <h2 className="text-lg font-semibold mb-2 text-black dark:text-white">
         <span className="text-yellow-500">Emma</span> Mental Health Assistant
       </h2>
-      <div className="mt-4 border rounded h-96 w-full overflow-hidden relative bg-gray-200 dark:bg-gray-700">
+      {/* Remove fixed height, add flex-grow to fill available space */}
+      <div className="mt-4 border rounded flex-grow w-full overflow-hidden relative bg-gray-200 dark:bg-gray-700">
         {/* AvatarDisplay will get state directly from store */}
         <AvatarDisplay />
       </div>
@@ -676,7 +678,9 @@ export default function Home() {
         {/* Avatar Panel */}
               {/* Avatar Panel (Use the memoized component) */}
               {/* Always render AvatarPanelComponent, hide with CSS */}
-              <div className={cn(showSettings && "hidden")}>
+              {/* Make avatar container take full height with bottom padding */}
+              {/* Remove bottom padding */}
+              <div className={cn("flex flex-col h-full", showSettings && "hidden")}>
                 <AvatarPanelComponent
                   // Props related to avatar state are removed, component will get state from Valtio store
                   layoutDirection={layoutDirection}

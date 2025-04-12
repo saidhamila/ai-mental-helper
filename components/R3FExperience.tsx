@@ -20,7 +20,8 @@ export const R3FExperience = () => { // Removed props
   useEffect(() => {
     if (cameraControls.current) {
       // Zoomed in for half-body shot
-      cameraControls.current.setLookAt(0, 1.6, 1.5, 0, 1.4, 0); // Adjusted camera height and target
+      // Viewing from the back at the same distance
+      cameraControls.current.setLookAt(0, 3.3, -6.0, 0, 3.3, 0); // Negative Z for back view
     }
   }, []);
 
@@ -38,7 +39,8 @@ export const R3FExperience = () => { // Removed props
       {/* Wrap Avatar in Suspense for asset loading */}
       <Suspense fallback={null}>
         {/* R3FAvatar will get state directly from store */}
-        <R3FAvatar position-y={0} />
+        {/* Let the primitive scene sit at the origin */}
+        <R3FAvatar />
       </Suspense>
 
       <ContactShadows opacity={0.7} blur={2} />

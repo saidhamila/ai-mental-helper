@@ -119,8 +119,8 @@ Begin when the user sends their first message.
 
 // Default settings
 const DEFAULT_SETTINGS: Settings = {
-  selectedModel: "openai",
-  apiUrl: "https://api.openai.com/v1",
+  selectedModel: "", // No default model
+  apiUrl: "", // No default API URL
   predefinedPrompt: DEFAULT_PROMPT,
   deepseekApiKey: "sk-0c198e8cdac84f4490a252bba561d3ed", // Added default DeepSeek key
   // Deepgram Defaults
@@ -129,7 +129,7 @@ const DEFAULT_SETTINGS: Settings = {
   // Re-add ElevenLabs Defaults
   elevenlabsApiKey: "", // Default to empty string, user must provide
   elevenlabsApiUrl: "https://api.elevenlabs.io/v1",
-  voiceId: "2Lb1en5ujrODDIqmp7F3", // Default Voice ID
+  voiceId: "", // No default Voice ID, user must provide
   // Removed other defaults (Epic Games)
   // epicGamesApiUrl: "https://api.epicgames.dev/metahuman", // Removed
 }
