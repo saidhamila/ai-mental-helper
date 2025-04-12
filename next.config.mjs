@@ -1,4 +1,4 @@
-import MiniCssExtractPlugin from 'mini-css-extract-plugin';
+// Removed explicit MiniCssExtractPlugin import
 
 let userConfig = undefined;
 try {
@@ -29,16 +29,7 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
-  webpack: (config, { isServer }) => {
-    // Explicitly add MiniCssExtractPlugin
-    // Ensure it's only added once and not on the server build
-    if (!isServer && !config.plugins.some(plugin => plugin.constructor.name === 'MiniCssExtractPlugin')) {
-      config.plugins.push(new MiniCssExtractPlugin());
-    }
-
-    // Important: return the modified config
-    return config;
-  },
+  // Removed explicit webpack config for MiniCssExtractPlugin
 }
 
 if (userConfig) {

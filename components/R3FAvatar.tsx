@@ -171,65 +171,83 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
     lerpMorphTarget("eyeBlinkLeft", blink ? 1 : 0, 0.5);
     lerpMorphTarget("eyeBlinkRight", blink ? 1 : 0, 0.5);
 
-    // --- A2F Animation Logic (Placeholder) ---
-    if (snap.isPlayingAudio && audioRef.current && snap.animationData) {
+    // --- A2F Animation Logic ---
+    const animData = snap.animationData; // Shortcut
+
+    if (snap.isPlayingAudio && audioRef.current && animData && animData.names && animData.timecourse && animData.timecourse.length > 0) {
       const currentTime = audioRef.current.currentTime;
+      // --- DEBUG LOGGING START ---
+      console.log(`Current Time: ${currentTime.toFixed(3)}`);
 
-      // TODO: Parse snap.animationData (the A2F gRPC response)
-      // The structure is unknown, but we expect blendshape values over time.
-      // Example structure might be: snap.animationData.frames[frameIndex].blendshapes = { mouthOpen: 0.8, ... }
-      // Or it might be a continuous stream of values.
+      // Find the current frame index based on time
+      let frameIndex = animData.timecourse.findIndex((frame: any) => frame.time_code >= currentTime);
 
-      // TODO: Find the correct blendshape values for the current audio time (currentTime).
-      // This might involve finding the closest frame in the animationData or interpolating between frames.
-      // Example placeholder:
-      const currentBlendshapes = getCurrentA2FBlendshapes(snap.animationData, currentTime); // Placeholder function
-
-      // TODO: Apply the found blendshape values to the model's morph targets.
-      // Iterate through the blendshapes received from A2F for the current time.
-      if (currentBlendshapes) {
-        Object.entries(currentBlendshapes).forEach(([name, value]) => {
-          // We need a mapping from A2F blendshape names (name) to the model's morph target names.
-          // For now, assume they match or use a placeholder mapping.
-          const morphTargetName = name; // Placeholder: Assume direct mapping
-          lerpMorphTarget(morphTargetName, value as number, 0.2); // Adjust interpolation speed as needed
-        });
+      // Handle edge cases: before first frame or after last frame
+      if (frameIndex === -1) { // After last frame
+        frameIndex = animData.timecourse.length - 1;
+      }
+      if (frameIndex === 0 && currentTime < animData.timecourse[0].time_code) { // Before first frame
+         // Use first frame directly
       }
 
-      // TODO: Reset morph targets not included in the current A2F frame?
-      // This depends on whether A2F provides all blendshapes per frame or only active ones.
-      // If only active ones, we need to reset others.
-      // Example:
-      // const allModelMorphTargets = Object.keys(nodes.Wolf3D_Head.morphTargetDictionary);
-      // allModelMorphTargets.forEach(targetName => {
-      //   if (!currentBlendshapes || !(targetName in currentBlendshapes)) {
-      //      // Don't reset blinking or facial expressions managed elsewhere
-      //      if (targetName !== 'eyeBlinkLeft' && targetName !== 'eyeBlinkRight' /* && other expression targets */) {
-      //         lerpMorphTarget(targetName, 0, 0.2);
-      //      }
-      //   }
-      // });
+      const prevFrame = animData.timecourse[frameIndex === 0 ? 0 : frameIndex - 1];
+      const nextFrame = animData.timecourse[frameIndex];
 
-    } else {
-      // If not playing audio or no animation data, reset facial animation morph targets (except expressions/blinking).
-      // TODO: Define the list of morph targets controlled by A2F and reset them here.
-      // Example placeholder - reset common lip-sync targets:
-      const lipSyncTargets = ["viseme_PP", "viseme_FF", "viseme_kk", "viseme_DD", "viseme_nn", "viseme_SS", "viseme_TH", "viseme_CH", "viseme_RR", "viseme_I", "viseme_E", "viseme_AA", "viseme_O", "viseme_U", "jawOpen", "mouthOpen"]; // Add actual A2F targets
-      lipSyncTargets.forEach(targetName => {
-         lerpMorphTarget(targetName, 0, 0.2);
-      });
+      if (!prevFrame || !nextFrame) {
+        // Should not happen if timecourse has data, but good to check
+        return;
+      }
+
+      // Calculate interpolation factor (t)
+      let t = 0;
+      const timeDiff = nextFrame.time_code - prevFrame.time_code;
+      if (timeDiff > 0) { // Avoid division by zero if frames have same timecode
+        t = (currentTime - prevFrame.time_code) / timeDiff;
+        t = Math.max(0, Math.min(1, t)); // Clamp t between 0 and 1
+      } else if (currentTime >= nextFrame.time_code) {
+         t = 1; // If current time is at or past the next frame, use next frame's values
+       }
+       console.log(`Frame Indices: Prev=${frameIndex === 0 ? 0 : frameIndex - 1}, Next=${frameIndex}, t=${t.toFixed(2)}`);
+      // Misplaced closing brace removed from here
+
+
+      // Apply interpolated values to morph targets
+      animData.names.forEach((name: string, i: number) => {
+        const prevValue = prevFrame.values[i] ?? 0; // Default to 0 if value missing
+        const nextValue = nextFrame.values[i] ?? 0; // Default to 0 if value missing
+
+        // Interpolate using THREE.MathUtils.lerp for clarity
+        const interpolatedValue = THREE.MathUtils.lerp(prevValue, nextValue, t);
+
+        // Apply the interpolated value (use a slightly faster speed for lip sync)
+        lerpMorphTarget(name, interpolatedValue, 0.5);
+        // Log one specific blendshape value for debugging
+        if (name === 'JawOpen' || name === 'mouthOpen') { // Check common names
+           console.log(`  ${name}: ${interpolatedValue.toFixed(3)} (Prev: ${prevValue.toFixed(3)}, Next: ${nextValue.toFixed(3)}, t: ${t.toFixed(2)})`);
+        }
+        // --- DEBUG LOGGING END ---
+      }); // End animData.names.forEach
+
+    } // <--- Correct closing brace for the main 'if (snap.isPlayingAudio && ...)' block
+
+    else {
+      // If not playing audio or no valid animation data, reset A2F-controlled morph targets to 0
+      if (animData && animData.names) {
+        animData.names.forEach((name: string) => {
+          // Don't reset blinking targets if they are managed separately
+          if (name !== 'eyeBlinkLeft' && name !== 'eyeBlinkRight') {
+             lerpMorphTarget(name, 0, 0.2); // Reset speed
+          }
+        });
+      } else {
+         // Fallback: If names are missing, maybe reset known common targets? (Less ideal)
+         const commonTargets = ["jawOpen", "mouthOpen", "mouthSmileLeft", "mouthSmileRight", "viseme_PP", "viseme_FF", "viseme_kk", "viseme_DD", "viseme_nn", "viseme_SS", "viseme_TH", "viseme_CH", "viseme_RR", "viseme_I", "viseme_E", "viseme_AA", "viseme_O", "viseme_U"];
+         commonTargets.forEach(name => lerpMorphTarget(name, 0, 0.2));
+      }
     }
   });
 
-// Placeholder function - replace with actual logic based on A2F response structure
-function getCurrentA2FBlendshapes(animationData: any, currentTime: number): Record<string, number> | null {
-  // console.log("Attempting to get blendshapes for time:", currentTime, "from data:", animationData);
-  // This needs to parse the specific gRPC response format from NVIDIA A2F.
-  // It might involve finding the frame closest to currentTime.
-  // Example: If animationData has { frames: [{ time: 0.1, blendshapes: {...} }, ...] }
-  // Find the frame where frame.time <= currentTime and potentially interpolate.
-  return null; // Return null until implemented
-}
+// Removed placeholder function getCurrentA2FBlendshapes
 
   // Blinking logic
   useEffect(() => {
