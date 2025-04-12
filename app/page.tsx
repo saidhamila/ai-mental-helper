@@ -118,7 +118,8 @@ export default function Home() {
   const [apiWarningMessage, setApiWarningMessage] = useState("")
 
   // Refs
-  const chatContainerRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null); // Ref for silence timer
 
   // Translation
   const { t } = useTranslation(selectedLanguage)
@@ -224,39 +225,60 @@ export default function Home() {
   };
 
 
-  // Handle chat submission
-  const handleChatSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return; // Prevent multiple submissions
-    const modelName = settings.selectedModel || "openai"
-    const apiKey = getApiKeyForModel(modelName)
-    if (!apiKey) {
-      showWarning(t("apiKeyMissing").replace("{model}", modelName.toUpperCase()))
-      return
-    }
-    const userMessage: Message = { id: `user-${Date.now()}`, role: "user", content: input }
-    let allMessages = [...messages, userMessage]
-    if (messages.length === 0 && settings.predefinedPrompt) {
-      const systemMessage: Message = { id: `system-${Date.now()}`, role: "system", content: settings.predefinedPrompt }
-      allMessages = [systemMessage, ...allMessages]
-    }
-    setMessages(allMessages)
-    setInput("")
-    setIsLoading(true);
-    avatarActions.stopAudio(); // Clear previous audio/sync data & set Idle initially
-    // avatarActions.setAnimation("Thinking"); // Optionally set a thinking animation
-    // setLipSyncData(null); // Handled by stopAudio action
-    try {
-      const assistantMessage: Message = { id: `assistant-${Date.now()}`, role: "assistant", content: "" };
-      setMessages((prev) => [...prev, assistantMessage]);
+  // Extracted function to handle the core logic of submitting a message and getting a response
+  const submitChatMessage = async (messageContent: string) => {
+    if (!messageContent.trim() || isLoading) return; // Prevent empty/multiple submissions
 
+    const modelName = settings.selectedModel;
+
+    // Validate settings needed for chat FIRST
+    if (!modelName) {
+      showWarning(t("modelNotSelected"));
+      setIsLoading(false); // Ensure loading stops if validation fails
+      return;
+    }
+    const apiKey = getApiKeyForModel(modelName); // Now safe to call
+    const apiUrl = settings.apiUrl || getDefaultApiUrl(modelName); // Now safe to call
+
+     if (!apiKey) {
+      showWarning(t("apiKeyMissing").replace("{model}", modelName.toUpperCase()));
+       setIsLoading(false);
+      return;
+    }
+     if (!apiUrl) {
+        showWarning(t("apiUrlMissing"));
+        setIsLoading(false);
+        return;
+     }
+
+    const userMessage: Message = { id: `user-${Date.now()}`, role: "user", content: messageContent };
+    let currentMessages = [...messages, userMessage]; // Use a local variable to track messages for this submission
+
+    // Add system prompt if it's the first message (excluding system)
+    if (messages.filter(m => m.role !== 'system').length === 0 && settings.predefinedPrompt) {
+      const systemMessage: Message = { id: `system-${Date.now()}`, role: "system", content: settings.predefinedPrompt };
+      currentMessages = [systemMessage, ...currentMessages];
+    }
+
+    setMessages(currentMessages); // Update UI with user message
+    setIsLoading(true);
+    avatarActions.stopAudio(); // Clear previous audio/sync data & set default animation
+
+    try {
+      const assistantMessagePlaceholder: Message = { id: `assistant-${Date.now()}`, role: "assistant", content: "" };
+      setMessages((prev) => [...prev, assistantMessagePlaceholder]); // Add placeholder for assistant response
+      currentMessages = [...currentMessages, assistantMessagePlaceholder]; // Add placeholder to local tracking
+
+      console.log(`Sending ${currentMessages.length} messages to /api/chat for model ${modelName}`);
       const response = await fetch("/api/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: allMessages, model: modelName, apiKey, apiUrl: settings.apiUrl || getDefaultApiUrl(modelName) }),
-       });
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: currentMessages, model: modelName, apiKey, apiUrl }),
+      });
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(`API error: ${response.status}${errorData.error ? ` - ${errorData.error}` : ""}`)
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`API error: ${response.status}${errorData.error ? ` - ${errorData.error.message || errorData.error}` : ""}`);
       }
 
       const data = await response.json();
@@ -264,45 +286,56 @@ export default function Home() {
 
       const assistantText = data.text || "I'm sorry, I couldn't generate a response.";
 
-      // Update the message bubble first
-      setMessages((currentMessages) => {
-        const updatedMessages = [...currentMessages];
-        const lastIndex = updatedMessages.length - 1;
-        if (updatedMessages[lastIndex]?.role === "assistant") {
-          updatedMessages[lastIndex] = { ...updatedMessages[lastIndex], content: assistantText };
-          if (currentChatId !== null) { saveUpdatedChat(currentChatId, updatedMessages); }
-        }
+      // Update the placeholder message with the actual content
+      setMessages((prevMessages) => {
+        const updatedMessages = prevMessages.map(msg =>
+          msg.id === assistantMessagePlaceholder.id ? { ...msg, content: assistantText } : msg
+        );
+        // Save updated chat history if applicable
+        if (currentChatId !== null) { saveUpdatedChat(currentChatId, updatedMessages); }
         return updatedMessages;
       });
 
-      // Now, generate speech for the received text
+      // Generate speech for the received text
       if (assistantText) {
-        // Settings are guaranteed to be loaded here because the form is disabled until isInitialized is true
-        await handleTextToSpeech(assistantText);
+        await handleTextToSpeech(assistantText); // This will eventually set isLoading=false
       } else {
         // If no text, stop loading and reset animation
         setIsLoading(false);
-        avatarActions.setAnimation("Idle"); // Use action
+        avatarActions.stopAudio(); // Ensure default state
       }
 
     } catch (error) {
       console.error("Chat/TTS error:", error);
-      // Update last message with error
-      setMessages((currentMessages) => {
-         const updatedMessages = [...currentMessages];
-         const lastIndex = updatedMessages.length - 1;
-         if (updatedMessages[lastIndex]?.role === "assistant") {
-            updatedMessages[lastIndex] = { ...updatedMessages[lastIndex], content: `Error: ${error instanceof Error ? error.message : "Unknown error"}. Check settings.` };
+      const errorMessage = `Error: ${error instanceof Error ? error.message : "Unknown error"}. Check settings.`;
+      // Update the *last* assistant message with the error, as placeholder might not exist
+       setMessages((prevMessages) => {
+         const lastIndex = prevMessages.length - 1;
+         if (lastIndex >= 0 && prevMessages[lastIndex].role === 'assistant') {
+            const updatedMessages = [...prevMessages];
+            updatedMessages[lastIndex] = { ...updatedMessages[lastIndex], content: errorMessage };
             if (currentChatId !== null) { saveUpdatedChat(currentChatId, updatedMessages); }
+            return updatedMessages;
          }
-         return updatedMessages;
-      });
-      showWarning(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
+         // If no assistant message exists (shouldn't happen often), just return previous state
+         return prevMessages;
+       });
+      showWarning(errorMessage);
       setIsLoading(false); // Stop loading on error
       avatarActions.stopAudio(); // Reset animation and clear audio state on error
     }
-    // Removed finally block here as loading/animation state is handled within try/catch/TTS flow
-  }
+    // Loading state is now handled within the try/catch and handleTextToSpeech
+  };
+
+  // Simplified handler for text input form submission
+  const handleChatSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const textInput = input.trim(); // Get current input value
+    if (!textInput || isLoading) return; // Prevent empty/multiple submissions
+
+    setInput(""); // Clear input field immediately
+    await submitChatMessage(textInput); // Call the core logic
+  };
 
   // Get default API URL based on model
   const getDefaultApiUrl = (model: string): string => {
@@ -316,31 +349,46 @@ export default function Home() {
   }
 
   // --- Speech Recognition Logic ---
+  // Modified handler for when recording stops (manually or via timer)
   const handleStopRecording = async () => {
-    if (audioChunksRef.current.length === 0) { console.warn("No audio chunks recorded."); return; }
-    setIsLoading(true); showWarning("Processing speech...");
-    const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm'; // Default to webm if unknown
-    const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-    audioChunksRef.current = [];
+    const audioBlob = audioChunksRef.current.length > 0
+      ? new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/webm' })
+      : null; // Create blob only if chunks exist
+
+    audioChunksRef.current = []; // Clear chunks regardless
+
+    if (!audioBlob) {
+      console.log("Silence detected or no audio recorded.");
+      // Submit "*silence*" message
+      await submitChatMessage("*silence*");
+      return;
+    }
+
+    // --- Process recorded audio ---
+    setIsLoading(true); // Set loading specifically for STT processing
+    showWarning("Processing speech..."); // Keep this warning
 
     const deepgramApiKey = settings.deepgramApiKey;
     const deepgramApiUrl = settings.deepgramApiUrl || "https://api.deepgram.com/v1/listen";
 
     if (!deepgramApiKey) {
       showWarning("Deepgram API Key is missing in settings.");
-      setIsLoading(false);
-      avatarActions.setAnimation("Idle"); // Ensure idle state if key is missing
+      setIsLoading(false); // Stop STT loading
+      avatarActions.stopAudio(); // Ensure default state
       return;
     }
+
+    let transcription = ""; // Initialize transcription
     try {
+      console.log(`Attempting to fetch Deepgram URL: ${deepgramApiUrl}`); // Log the URL
       console.log(`Sending audio to Deepgram: ${deepgramApiUrl}`);
       const response = await fetch(deepgramApiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Token ${deepgramApiKey}`,
-          'Content-Type': mimeType, // Use the actual mimeType from the recorder
+          'Content-Type': audioBlob.type,
         },
-        body: audioBlob, // Send the blob directly
+        body: audioBlob,
       });
 
       if (!response.ok) {
@@ -350,20 +398,24 @@ export default function Home() {
 
       const data = await response.json();
       console.log("Received Deepgram transcription data:", data);
+      transcription = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || ""; // Get transcription or empty string
 
-      // Extract transcription from Deepgram's response structure
-      const transcription = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
-
-      if (transcription) {
-        setInput((prev) => prev ? `${prev} ${transcription}` : transcription);
-      } else {
-        console.warn("No transcription found in Deepgram response:", data);
-        showWarning("Could not transcribe audio.");
-      }
     } catch (error) {
       console.error("Speech recognition error:", error);
       showWarning(`Speech recognition failed: ${error instanceof Error ? error.message : "Unknown error"}`);
-    } finally { setIsLoading(false); setShowApiWarning(false); avatarActions.setAnimation("Idle"); } // Revert to Idle after processing speech
+      // Don't submit if STT fails, just reset loading state
+      setIsLoading(false);
+      setShowApiWarning(false);
+      avatarActions.stopAudio(); // Ensure default state
+      return; // Exit function
+    }
+
+    // Determine message content and submit
+    const messageToSend = transcription.trim() || "*silence*";
+    console.log(`Submitting transcribed/silence message: "${messageToSend}"`);
+    setShowApiWarning(false); // Clear "Processing" warning
+    // setIsLoading is handled by submitChatMessage
+    await submitChatMessage(messageToSend);
   };
   const startRecording = async () => {
     if (!settings.deepgramApiKey) { showWarning(t("apiKeyMissing").replace("{model}", "Deepgram Speech-to-Text")); return; }
@@ -374,12 +426,35 @@ export default function Home() {
       try { recorder = new MediaRecorder(stream, options); }
       catch (err) { console.warn("Requested mimeType not supported, trying default."); recorder = new MediaRecorder(stream); }
       mediaRecorderRef.current = recorder; audioChunksRef.current = [];
-      recorder.ondataavailable = (event) => { if (event.data.size > 0) { audioChunksRef.current.push(event.data); } };
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          // Got audio data, cancel the initial silence timer
+          clearTimeout(silenceTimerRef.current!);
+          silenceTimerRef.current = null; // Clear the ref
+          audioChunksRef.current.push(event.data);
+        }
+        // No longer resetting a timer here
+      };
       recorder.onstop = handleStopRecording;
-      recorder.start(); setIsListening(true); console.log("Recording started with mimeType:", recorder.mimeType);
+      recorder.start();
+      setIsListening(true);
+      console.log("Recording started with mimeType:", recorder.mimeType);
+      // Start initial silence timer (5 seconds)
+      clearTimeout(silenceTimerRef.current!); // Clear any lingering timer
+      silenceTimerRef.current = setTimeout(() => {
+        console.log("Initial 5s silence detected, stopping recording...");
+        // Check if still listening - user might have stopped manually just before timer fired
+        if (isListening) {
+            stopRecording(); // Automatically stop if 5s pass with no data
+        }
+        silenceTimerRef.current = null;
+      }, 5000); // 5 seconds
     } catch (error) { console.error("Error accessing microphone:", error); showWarning("Could not access microphone."); setIsListening(false); }
   };
+  // Modified stopRecording to clear the timer
   const stopRecording = () => {
+    clearTimeout(silenceTimerRef.current!); // Clear silence timer
+    silenceTimerRef.current = null;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());

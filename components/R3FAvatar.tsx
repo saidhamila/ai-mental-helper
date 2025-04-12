@@ -1,10 +1,10 @@
 "use client"
 
-import { useAnimations, useGLTF } from "@react-three/drei";
+import { useAnimations, Html } from "@react-three/drei"; // Removed useGLTF
 import { useFrame } from "@react-three/fiber";
-import React, { useEffect, useRef, useState, memo } from "react"; // Import memo
-import { useSnapshot } from 'valtio/react'; // Import useSnapshot
-import { avatarStore, avatarActions } from '@/store/avatarStore'; // Import store and actions
+import React, { useEffect, useRef, useState, memo } from "react";
+import { useSnapshot } from 'valtio/react';
+import { avatarStore, avatarActions } from '@/store/avatarStore';
 import * as THREE from "three";
 
 // Basic facial expressions (can be expanded later)
@@ -21,22 +21,28 @@ const facialExpressions = {
   },
 };
 
-const R3FAvatarComponent = (props: any) => { // Keep generic props for position etc.
+// Define props for the component
+interface R3FAvatarProps {
+  scene: THREE.Group; // Expect the loaded scene graph
+  animations: THREE.AnimationClip[]; // Expect animations
+  // Include other props passed from parent if any (like position, scale)
+  [key: string]: any;
+}
+
+const R3FAvatarComponent = ({ scene, animations, ...props }: R3FAvatarProps) => {
   // Get state snapshot from Valtio store
   const snap = useSnapshot(avatarStore);
   const group = useRef<THREE.Group>(null);
-  // Load the main model GLB, which now includes animations
-  const { nodes, materials, scene, animations } = useGLTF(
-    "/models/64f1a714fe61576b46f27ca2.glb"
-  ) as any; // Use 'as any' for GLTF result type for now
 
-  // Use animations from the main model GLB, targeting the group ref
+  // Removed useGLTF hook - scene and animations are now passed as props
+
+  // Use animations passed via props, targeting the group ref
   const { actions } = useAnimations(animations, group);
 
-  // Log available animation names once
+  // Log available animation names once (using prop)
   useEffect(() => {
     if (animations && animations.length > 0) {
-      console.log("Available animation names:", JSON.stringify(animations.map((a: THREE.AnimationClip) => a.name)));
+      console.log("Available animation names (from props):", JSON.stringify(animations.map((a: THREE.AnimationClip) => a.name)));
     }
   }, [animations]);
 
@@ -45,6 +51,8 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
 
   // Body animation effect
   useEffect(() => {
+    // Ensure actions are available (might take a frame after animations prop updates)
+    if (!actions) return;
     const currentAction = actions[snap.animationName];
     if (currentAction) {
       Object.values(actions).forEach(action => {
@@ -62,7 +70,7 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
          console.warn(`Default animation "W_2" also not found!`);
       }
     }
-  }, [snap.animationName, actions]);
+  }, [snap.animationName, actions]); // Depend on actions object as well
 
   // Audio playback effect
   useEffect(() => {
@@ -104,15 +112,11 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
     }
   }, [snap.audioUrl]);
 
-  // Modified lerpMorphTarget to find meshes by name during traversal
+  // Modified lerpMorphTarget to use the scene prop
   const lerpMorphTarget = (targetName: string, value: number, speed = 0.1) => {
-    if (!scene) return; // Ensure scene is loaded
+    if (!scene) return; // Ensure scene prop is valid
 
     scene.traverse((child: any) => {
-      // Log all skinned mesh names found
-      if (child.isSkinnedMesh) {
-        // console.log(`Found SkinnedMesh: ${child.name}`); // Uncomment for verbose logging
-      }
       // Apply to head, eyes, and teeth meshes if they exist and have morph targets
       if (child.isSkinnedMesh &&
           (child.name === "Wolf3D_Head" || child.name === "EyeLeft" || child.name === "EyeRight" || child.name === "Wolf3D_Teeth")) {
@@ -131,10 +135,6 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
               speed
             );
           }
-          // Optional: Warn if a target name from A2F doesn't exist on the mesh
-          // else if (index === undefined && value > 0.01) { // Only warn if trying to apply non-zero value
-          //   console.warn(`Morph target "${targetName}" not found on mesh "${child.name}"`);
-          // }
         }
       }
     });
@@ -143,34 +143,23 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
   const [blink, setBlink] = useState(false);
   // Helper state to prevent excessive logging
   const [loggedMorphTargets, setLoggedMorphTargets] = useState<Record<string, boolean>>({});
-  // const [facialExpression] = useState("default"); // Keep default for now - Commented out as it's not used
 
   useFrame(() => {
     // Apply blinking
-    // Need to ensure 'eyeBlinkLeft' and 'eyeBlinkRight' are valid target names from A2F data or model
-    lerpMorphTarget("EyeBlinkLeft", blink ? 1 : 0, 0.5); // Assuming A2F uses 'EyeBlinkLeft'
-    lerpMorphTarget("EyeBlinkRight", blink ? 1 : 0, 0.5); // Assuming A2F uses 'EyeBlinkRight'
+    lerpMorphTarget("EyeBlinkLeft", blink ? 1 : 0, 0.5);
+    lerpMorphTarget("EyeBlinkRight", blink ? 1 : 0, 0.5);
 
     // --- A2F Animation Logic ---
-    const animData = snap.animationData; // Shortcut
+    const animData = snap.animationData;
 
     if (snap.isPlayingAudio && audioRef.current && animData?.names && animData?.timecourse && animData.timecourse.length > 0) {
-      // console.log("useFrame: Applying A2F animation frame..."); // Uncomment for verbose logging
       const currentTime = audioRef.current.currentTime;
-
-      // Find the current frame index based on time
       let frameIndex = animData.timecourse.findIndex((frame: any) => frame.time_code >= currentTime);
-
-      // Handle edge cases
       if (frameIndex === -1) { frameIndex = animData.timecourse.length - 1; }
       if (frameIndex === 0 && currentTime < animData.timecourse[0].time_code) { /* Use first frame */ }
-
       const prevFrame = animData.timecourse[frameIndex === 0 ? 0 : frameIndex - 1];
       const nextFrame = animData.timecourse[frameIndex];
-
       if (!prevFrame || !nextFrame) { return; }
-
-      // Calculate interpolation factor (t)
       let t = 0;
       const timeDiff = nextFrame.time_code - prevFrame.time_code;
       if (timeDiff > 0) {
@@ -179,41 +168,24 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
       } else if (currentTime >= nextFrame.time_code) {
          t = 1;
        }
-       // console.log(`Frame Indices: Prev=${frameIndex === 0 ? 0 : frameIndex - 1}, Next=${frameIndex}, t=${t.toFixed(2)}`);
-
-      // Apply interpolated values to morph targets
       animData.names.forEach((name: string, i: number) => {
-        // Skip blinking targets if they are handled separately by the blink state
-        if (name === 'EyeBlinkLeft' || name === 'EyeBlinkRight') {
-            return;
-        }
+        if (name === 'EyeBlinkLeft' || name === 'EyeBlinkRight') { return; }
         const prevValue = prevFrame.values[i] ?? 0;
         const nextValue = nextFrame.values[i] ?? 0;
         const interpolatedValue = THREE.MathUtils.lerp(prevValue, nextValue, t);
-        lerpMorphTarget(name, interpolatedValue, 0.5); // Apply A2F data
-
-        // Log one specific blendshape value for debugging
-        // if (name === 'JawOpen' || name === 'mouthOpen') {
-        //    console.log(`  ${name}: ${interpolatedValue.toFixed(3)} (Prev: ${prevValue.toFixed(3)}, Next: ${nextValue.toFixed(3)}, t: ${t.toFixed(2)})`);
-        // }
+        lerpMorphTarget(name, interpolatedValue, 0.5);
       });
-
     } else {
-      // If not playing audio or no valid animation data, reset A2F-controlled morph targets to 0
-      if (animData?.names) { // Use optional chaining
+      if (animData?.names) {
         animData.names.forEach((name: string) => {
-          // Don't reset blinking targets if they are managed separately
           if (name !== 'EyeBlinkLeft' && name !== 'EyeBlinkRight') {
-             lerpMorphTarget(name, 0, 0.2); // Reset speed
+             lerpMorphTarget(name, 0, 0.2);
           }
         });
       } else if (!animData?.names && snap.animationName !== 'W_2') {
-         // If animation data is missing BUT we are not in the default state
-         // (e.g., after an error during A2F), explicitly reset common targets.
-         // This prevents the face from freezing in the last animated state.
-         const commonTargets = animData?.names || ["jawOpen", "mouthOpen", "mouthSmileLeft", "mouthSmileRight", "viseme_PP", "viseme_FF", "viseme_kk", "viseme_DD", "viseme_nn", "viseme_SS", "viseme_TH", "viseme_CH", "viseme_RR", "viseme_I", "viseme_E", "viseme_AA", "viseme_O", "viseme_U", "EyeBlinkLeft", "EyeBlinkRight"]; // Use A2F names if available, else fallback
+         const commonTargets = animData?.names || ["jawOpen", "mouthOpen", "mouthSmileLeft", "mouthSmileRight", "viseme_PP", "viseme_FF", "viseme_kk", "viseme_DD", "viseme_nn", "viseme_SS", "viseme_TH", "viseme_CH", "viseme_RR", "viseme_I", "viseme_E", "viseme_AA", "viseme_O", "viseme_U", "EyeBlinkLeft", "EyeBlinkRight"];
          commonTargets.forEach((name: string) => {
-             if (name !== 'EyeBlinkLeft' && name !== 'EyeBlinkRight') { // Check again here
+             if (name !== 'EyeBlinkLeft' && name !== 'EyeBlinkRight') {
                  lerpMorphTarget(name, 0, 0.2);
              }
          });
@@ -226,22 +198,21 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
     let blinkTimeout: NodeJS.Timeout;
     const nextBlink = () => {
       blinkTimeout = setTimeout(() => {
-        setBlink(true); // Use the state setter
+        setBlink(true);
         setTimeout(() => {
-          setBlink(false); // Use the state setter
+          setBlink(false);
           nextBlink();
-        }, 200); // Blink duration
-      }, THREE.MathUtils.randInt(1000, 5000)); // Time between blinks
+        }, 200);
+      }, THREE.MathUtils.randInt(1000, 5000));
     };
     nextBlink();
     return () => clearTimeout(blinkTimeout);
-  }, []); // Empty dependency array ensures this runs once on mount
+  }, []);
 
-  // Return structure with primitive
+  // Return structure with primitive, using the passed scene
   return (
     <group {...props} dispose={null} ref={group}>
-      {/* Render the entire loaded scene */}
-      {/* The useAnimations hook needs the group ref to target animations within this scene */}
+      {/* Render the entire loaded scene passed via props */}
       <primitive object={scene} />
     </group>
   );
@@ -250,6 +221,4 @@ const R3FAvatarComponent = (props: any) => { // Keep generic props for position 
 // Export the memoized component
 export const R3FAvatar = memo(R3FAvatarComponent);
 
-// Preload assets
-useGLTF.preload("/models/64f1a714fe61576b46f27ca2.glb");
-// Remove preload for the separate animations file
+// Removed useGLTF.preload call
