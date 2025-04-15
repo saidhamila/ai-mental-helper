@@ -1,7 +1,7 @@
 # AI Therapist – Inspection-Only License
 
 **Effective Date:** April 15, 2025  
-**Author:** [Your Name or Organization]
+**Author:** @BilBini
 
 ---
 
