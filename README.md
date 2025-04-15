@@ -2,9 +2,7 @@
 
 [![Developer](https://img.shields.io/badge/Developer-BilBini-blueviolet)](https://github.com/BilBini) <!-- Optional: Link to GitHub profile -->
 
-<p align="center">
-  <img src="public/placeholder-logo.svg" alt="Emma Logo" width="150"/>
-</p>
+> ⚠️ **Inspection Only:** This project is provided solely for inspection purposes. Any use, modification, or distribution is strictly prohibited.
 
 A conversational AI assistant designed to provide a safe, empathetic space for users to explore their mental and emotional well-being. Emma utilizes advanced AI models for chat, text-to-speech, and facial animation to create a more engaging and supportive experience.
 
