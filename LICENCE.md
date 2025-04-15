@@ -46,10 +46,4 @@ The AI Therapist project is provided "as is" without any warranties, express or 
 
 ---
 
-## 7. Contact
-
-For inquiries or permissions beyond the scope of this license, please contact: [your.email@example.com]
-
----
-
 © 2025 [Your Name or Organization]. All rights reserved.
