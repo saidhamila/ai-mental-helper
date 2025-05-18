@@ -2,7 +2,7 @@
 
 [![Developer](https://img.shields.io/badge/Developer-saidhamila-blueviolet)](https://github.com/saidhamila) <!-- Optional: Link to GitHub profile -->
 
-[![Watch on YouTube](https://img.youtube.com/vi/0RjKeU40hDU/0.jpg)](https://youtu.be/0RjKeU40hDU)
+[![Watch on YouTube](https://img.youtube.com/vi/0RjKeU40hDU/0.jpg)](https://github.com/saidhamila/ai-mental-helper)
 
 > ⚠️ **Inspection Only:** This project is provided solely for inspection purposes. Any use, modification, or distribution is strictly prohibited.
 
