@@ -1,6 +1,6 @@
 # Emma - AI Mental Health Assistant
 
-[![Developer](https://img.shields.io/badge/Developer-BilBini-blueviolet)](https://github.com/BilBini) <!-- Optional: Link to GitHub profile -->
+[![Developer](https://img.shields.io/badge/Developer-Saïd-Hamila-blueviolet)](https://github.com/saidhamila) <!-- Optional: Link to GitHub profile -->
 
 > ⚠️ **Inspection Only:** This project is provided solely for inspection purposes. Any use, modification, or distribution is strictly prohibited.
 
