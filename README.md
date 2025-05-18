@@ -70,6 +70,6 @@ Follow these steps to set up the project locally:
 
 ## Developer
 
-This application was developed by **BilBini**.
+This application was developed by **Saïd Hamila**.
 
 ---
